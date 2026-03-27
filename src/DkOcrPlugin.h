@@ -3,6 +3,8 @@
 #include <QSet>
 
 #include "DkPluginInterface.h"
+#include "DkBaseViewPort.h"
+#include "DkImageContainer.h"
 #include "WinOcrEngine.h"
 
 namespace nmo
@@ -44,6 +46,7 @@ public:
     ~DkOcrViewPort() override;
 
     void startOcr();
+    void updateImageContainer(QSharedPointer<nmc::DkImageContainerT> imgC) override;
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -60,6 +63,7 @@ private:
         int lineIndex;
     };
 
+    nmc::DkBaseViewPort *findViewPort() const;
     QTransform getTransform() const;
     int wordAtPoint(const QPointF &widgetPos) const;
     QVector<int> wordsInRect(const QRectF &widgetRect) const;
@@ -70,8 +74,12 @@ private:
     OcrResult mOcrResult;
     QVector<WordInfo> mWords; // flattened word list
 
+    QSharedPointer<nmc::DkImageContainerT> mImgC;
+    QImage mCachedImage; // snapshot taken at updateImageContainer time
+    QSize mOcrImageSize; // size of the image fed to OCR
     bool mOcrRunning = false;
     bool mOcrDone = false;
+    bool mConnectedToViewPort = false;
 
     // selection state
     QSet<int> mSelectedWords;

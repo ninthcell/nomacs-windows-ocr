@@ -7,6 +7,7 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QTimer>
 #include <QtConcurrent>
 
 #include "DkBaseViewPort.h"
@@ -77,16 +78,45 @@ DkOcrViewPort::DkOcrViewPort(QWidget *parent)
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     setAttribute(Qt::WA_TranslucentBackground);
-
-    // Repaint overlay when the viewport is zoomed/panned
-    auto *vp = dynamic_cast<nmc::DkBaseViewPort *>(parent);
-    if (vp) {
-        connect(vp, &nmc::DkBaseViewPort::imageUpdated, this, QOverload<>::of(&QWidget::update));
-    }
 }
 
 DkOcrViewPort::~DkOcrViewPort()
 {
+}
+
+void DkOcrViewPort::updateImageContainer(QSharedPointer<nmc::DkImageContainerT> imgC)
+{
+    mImgC = imgC;
+
+    if (!imgC)
+        return;
+
+    // Load original image directly from file to guarantee full resolution
+    // and avoid ABI issues with imgC->image().
+    QString path = imgC->filePath();
+    if (!path.isEmpty()) {
+        QImage fromFile(path);
+        if (!fromFile.isNull()) {
+            mCachedImage = fromFile;
+            return;
+        }
+    }
+
+    // Fallback: try imgC->image()
+    try {
+        mCachedImage = imgC->image();
+    } catch (...) {
+        // Silently ignore — OCR will show "No image" if mCachedImage is null
+    }
+}
+
+nmc::DkBaseViewPort *DkOcrViewPort::findViewPort() const
+{
+    for (QWidget *w = parentWidget(); w; w = w->parentWidget()) {
+        if (auto *vp = dynamic_cast<nmc::DkBaseViewPort *>(w))
+            return vp;
+    }
+    return nullptr;
 }
 
 void DkOcrViewPort::startOcr()
@@ -101,14 +131,25 @@ void DkOcrViewPort::startOcr()
     mOcrDone = false;
     mDragging = false;
 
-    auto *vp = dynamic_cast<nmc::DkBaseViewPort *>(parentWidget());
-    if (!vp)
+    auto *vp = findViewPort();
+    if (!vp) {
+        // Viewport not ready yet — retry after event loop processes
+        // the setPaintWidget reparenting.
+        QTimer::singleShot(0, this, &DkOcrViewPort::startOcr);
         return;
+    }
 
-    QImage img = vp->getImage();
+    // Connect zoom/pan repaint (once)
+    if (!mConnectedToViewPort) {
+        connect(vp, &nmc::DkBaseViewPort::imageUpdated, this, QOverload<>::of(&QWidget::update));
+        mConnectedToViewPort = true;
+    }
+
+    QImage img = mCachedImage;
     if (img.isNull())
         return;
 
+    mOcrImageSize = img.size();
     mOcrRunning = true;
     update();
     setFocus();
@@ -143,10 +184,25 @@ void DkOcrViewPort::startOcr()
 
 QTransform DkOcrViewPort::getTransform() const
 {
-    auto *vp = dynamic_cast<nmc::DkBaseViewPort *>(parentWidget());
+    auto *vp = findViewPort();
     if (!vp)
         return QTransform();
-    return vp->getImageMatrix() * vp->getWorldMatrix();
+
+    // getImageViewRect() returns the image rectangle in widget coordinates
+    // (with zoom/pan applied). This is implemented in the nomacs DLL so it
+    // uses correct member offsets regardless of ABI differences.
+    QRectF viewRect = vp->getImageViewRect();
+
+    if (viewRect.isEmpty() || mOcrImageSize.isEmpty())
+        return QTransform();
+
+    qreal sx = viewRect.width() / mOcrImageSize.width();
+    qreal sy = viewRect.height() / mOcrImageSize.height();
+
+    QTransform t;
+    t.translate(viewRect.x(), viewRect.y());
+    t.scale(sx, sy);
+    return t;
 }
 
 // ----------------------------------------------------------------

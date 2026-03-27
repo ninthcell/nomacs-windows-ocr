@@ -134,7 +134,9 @@ macro(NMC_CREATE_TARGETS)
             PROPERTIES RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${NOMACS_BUILD_DIRECTORY}/MinSizeRel/plugins/
         )
 
-        add_dependencies(${PROJECT_NAME} ${DLL_CORE_NAME})
+        if(TARGET ${DLL_CORE_NAME})
+            add_dependencies(${PROJECT_NAME} ${DLL_CORE_NAME})
+        endif()
 
         # CMAKE_MAKE_PROGRAM works for VS 2017 too
         get_filename_component(VS_PATH ${CMAKE_MAKE_PROGRAM} PATH)
@@ -234,7 +236,7 @@ macro(NMC_GENERATE_USER_FILE)
             else()
                 set(PROCESSOR_TYPE "Win32")
             endif()
-            configure_file(../cmake/project.vcxproj.user.in ${PROJECT_NAME}.vcxproj.user)
+            configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/project.vcxproj.user.in ${PROJECT_NAME}.vcxproj.user)
         endif()
     endif(MSVC)
 endmacro(NMC_GENERATE_USER_FILE)

@@ -1,0 +1,99 @@
+name: Build Plugin
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  QT_VERSION: "6.8.3"
+  NOMACS_REF: "master"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout plugin
+        uses: actions/checkout@v4
+
+      - name: Checkout nomacs
+        uses: actions/checkout@v4
+        with:
+          repository: nomacs/nomacs
+          ref: ${{ env.NOMACS_REF }}
+          path: nomacs
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          modules: qt5compat qtimageformats
+
+      - name: Install vcpkg dependencies
+        shell: bash
+        run: |
+          vcpkg install opencv4:x64-windows exiv2:x64-windows
+
+      - name: Patch nomacs for standalone build
+        shell: bash
+        run: |
+          # Skip missing DLL copies in cmake configure
+          sed -i 's/^file(COPY \${EXIV2_BUILD_PATH}.*/# &/' nomacs/ImageLounge/cmake/WinBuildTarget-qt6.cmake
+          sed -i 's/^file(COPY \${EXPAT_BUILD_PATH}.*/# &/' nomacs/ImageLounge/cmake/WinBuildTarget-qt6.cmake
+          sed -i 's/^file(COPY \${LIBRAW_BUILD_PATH}.*/# &/' nomacs/ImageLounge/cmake/WinBuildTarget-qt6.cmake
+          sed -i 's/^file(COPY \${OpenCV_DIR}\/bin.*/# &/' nomacs/ImageLounge/cmake/WinBuildTarget-qt6.cmake
+
+          # Set EXIV2_LIBS to imported target
+          sed -i '/^find_package(exiv2 REQUIRED)/a set(EXIV2_LIBS Exiv2::exiv2lib)' nomacs/ImageLounge/cmake/Win.cmake
+
+          # Add missing shellapi.h include
+          sed -i '/#include <windows.h>/a #include <shellapi.h>' nomacs/ImageLounge/src/DkCore/DkActionManager.cpp
+
+      - name: Configure nomacs
+        shell: bash
+        run: |
+          cmake -S nomacs/ImageLounge -B nomacs-build \
+            -A x64 \
+            -DCMAKE_PREFIX_PATH="${Qt6_DIR};${VCPKG_INSTALLATION_ROOT}/installed/x64-windows" \
+            -DENABLE_RAW=OFF \
+            -DENABLE_TIFF=OFF \
+            -DENABLE_QUAZIP=OFF \
+            -DENABLE_TRANSLATIONS=OFF \
+            -DENABLE_PLUGINS=OFF \
+            -DENABLE_TESTING=OFF \
+            -Wno-dev
+
+      - name: Build nomacsCore
+        shell: bash
+        run: cmake --build nomacs-build --target nomacsCore --config Release
+
+      - name: Configure plugin
+        shell: bash
+        run: |
+          cmake -S . -B build \
+            -A x64 \
+            -DCMAKE_PREFIX_PATH="${Qt6_DIR};${VCPKG_INSTALLATION_ROOT}/installed/x64-windows" \
+            -DNOMACS_BUILD_DIRECTORY="$(pwd)/nomacs-build" \
+            -DNOMACS_INCLUDE_DIRECTORY="$(pwd)/nomacs/ImageLounge/src/DkCore" \
+            -DNOMACS_LIBS="$(pwd)/nomacs-build/libs/Release/nomacsCore.lib" \
+            -DDLL_CORE_NAME=nomacsCore \
+            -Wno-dev
+
+      - name: Build plugin
+        shell: bash
+        run: cmake --build build --config Release
+
+      - name: Package artifact
+        shell: bash
+        run: |
+          mkdir -p artifact
+          cp nomacs-build/Release/plugins/OcrPlugin.dll artifact/
+          cp src/DkOcrPlugin.json artifact/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OcrPlugin-x64
+          path: artifact/

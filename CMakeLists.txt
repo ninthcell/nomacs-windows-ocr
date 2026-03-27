@@ -14,11 +14,15 @@ include_directories(
     ${OpenCV_INCLUDE_DIRS}
     ${CMAKE_CURRENT_BINARY_DIR}
     ${NOMACS_INCLUDE_DIRECTORY}
+    ${NOMACS_INCLUDE_DIRECTORY}/../DkGui
+    ${NOMACS_INCLUDE_DIRECTORY}/..
 )
 
 file(GLOB PLUGIN_SOURCES "src/*.cpp")
 file(GLOB PLUGIN_HEADERS "src/*.h" "${NOMACS_INCLUDE_DIRECTORY}/DkPluginInterface.h")
 file(GLOB PLUGIN_JSON "src/*.json")
+
+set_source_files_properties("${NOMACS_INCLUDE_DIRECTORY}/DkPluginInterface.h" PROPERTIES SKIP_AUTOMOC ON)
 
 NMC_PLUGIN_ID_AND_VERSION()
 
