@@ -1,0 +1,11 @@
+{
+    "PluginName"   : "Windows OCR",
+    "Tagline"      : "Detect and copy text from images using Windows OCR.",
+    "Description"  : "Uses Windows built-in OCR (Windows.Media.Ocr) to detect text in images. Shows bounding boxes around detected text and allows text selection and clipboard copy, similar to the Windows Photos app.",
+    "AuthorName"   : "nomacs contributors",
+    "Company"      : "nomacs",
+    "DateCreated"  : "2026-03-27",
+    "DateModified" : "2026-03-27",
+    "PluginId"     : "d2f7a8b4e3c1490d8e5f6a7b3c4d5e6f",
+    "Version"      : "0.1.0"
+}
