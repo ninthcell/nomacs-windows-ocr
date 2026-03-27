@@ -2,6 +2,8 @@
 
 A [nomacs](https://nomacs.org) plugin that detects and copies text from images using the built-in Windows OCR engine (`Windows.Media.Ocr`).
 
+![demo image](assets/demo.png)
+
 ## Features
 
 - Text detection with bounding box overlay
