@@ -11,6 +11,9 @@ env:
   QT_VERSION: "6.8.3"
   NOMACS_REF: "master"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
